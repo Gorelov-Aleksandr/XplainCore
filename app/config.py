@@ -6,9 +6,22 @@ class Settings(BaseSettings):
     Application configuration settings.
     Values can be overridden by environment variables.
     """
+    # Service settings
+    service_name: str = os.getenv("SERVICE_NAME", "xai-service")
+    environment: str = os.getenv("ENVIRONMENT", "development")
+    debug: bool = os.getenv("DEBUG", "true").lower() == "true"
+    
+    # Cache settings
     redis_url: str = os.getenv("REDIS_URL", "redis://redis:6379/0")
+    cache_ttl: int = int(os.getenv("CACHE_TTL", "300"))  # seconds
+    
+    # Tracing settings
     jaeger_host: str = os.getenv("JAEGER_HOST", "jaeger")
     jaeger_port: int = int(os.getenv("JAEGER_PORT", "6831"))
+    
+    # Authentication settings
+    auth_enabled: bool = os.getenv("AUTH_ENABLED", "true").lower() == "true"
+    dev_api_key: str = os.getenv("DEV_API_KEY", "XAI-dev-key-2023")
     
     # Yandex OAuth settings
     yandex_oauth_url: str = os.getenv("YANDEX_OAUTH_URL", "https://oauth.yandex.ru/authorize")
@@ -24,8 +37,14 @@ class Settings(BaseSettings):
     rate_limit: int = int(os.getenv("RATE_LIMIT", "100"))
     rate_limit_window: int = int(os.getenv("RATE_LIMIT_WINDOW", "60"))  # seconds
     
-    # Cache TTL
-    cache_ttl: int = int(os.getenv("CACHE_TTL", "300"))  # seconds
+    # Models
+    model_path: str = os.getenv("MODEL_PATH", "./models/xai_model.pkl")
+    model_version: str = os.getenv("MODEL_VERSION", "1.0.0")
+    
+    # Visualization settings
+    max_features: int = int(os.getenv("MAX_FEATURES", "10"))
+    plot_height: int = int(os.getenv("PLOT_HEIGHT", "400"))
+    plot_width: int = int(os.getenv("PLOT_WIDTH", "600"))
 
     class Config:
         env_file = ".env"
