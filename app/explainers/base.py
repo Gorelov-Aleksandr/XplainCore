@@ -10,7 +10,8 @@ import logging
 # Using standard logging instead of loguru for better compatibility
 logger = logging.getLogger(__name__)
 
-from ..models import ModelType, ExplanationMethod, InputData, ExplanationDetails
+from app.models import ModelType, ExplanationMethod
+from app.models.schema import InputData, ExplanationDetails
 
 class BaseExplainer(ABC):
     """

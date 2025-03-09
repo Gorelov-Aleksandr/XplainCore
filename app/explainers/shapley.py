@@ -14,7 +14,8 @@ from typing import Dict, Any, List, Optional, Tuple
 # Using standard logging instead of loguru for better compatibility
 logger = logging.getLogger(__name__)
 
-from ..models import ModelType, ExplanationMethod, InputData, ExplanationDetails, VisualizationType, VisualizationData
+from app.models import ModelType, ExplanationMethod, VisualizationType
+from app.models.schema import InputData, ExplanationDetails, VisualizationData
 from .base import BaseExplainer
 
 class ShapleyExplainer(BaseExplainer):

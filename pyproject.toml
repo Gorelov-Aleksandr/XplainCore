@@ -5,6 +5,7 @@ description = "Add your description here"
 requires-python = ">=3.11"
 dependencies = [
     "aiocache>=0.12.3",
+    "alembic>=1.15.1",
     "fastapi>=0.115.11",
     "flask-login>=0.6.3",
     "flask-wtf>=1.2.2",
@@ -13,9 +14,11 @@ dependencies = [
     "opentelemetry-exporter-jaeger>=1.21.0",
     "opentelemetry-sdk>=1.30.0",
     "prometheus-client>=0.21.1",
+    "psycopg2-binary>=2.9.10",
     "pydantic>=2.10.6",
     "pydantic-settings>=2.8.1",
     "requests>=2.32.3",
     "sentry-sdk>=2.22.0",
+    "sqlalchemy>=2.0.38",
     "uvicorn>=0.34.0",
 ]

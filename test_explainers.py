@@ -7,37 +7,42 @@ and explanation methods.
 import json
 import requests
 import time
-from pprint import pprint
+from typing import Dict, Any, List, Optional
 
-# Configuration
-BASE_URL = "http://localhost:5000"
-API_KEY = "XAI-dev-key-2023"
+# API endpoint - adjust as needed for your environment
+API_URL = "http://127.0.0.1:5000"
+AUTH_HEADER = {"X-API-Key": "XAI-dev-key-2023"}  # Development API key
 
-# Default headers
-headers = {
-    "accept": "application/json",
-    "Content-Type": "application/json",
-    "X-API-Key": API_KEY
-}
 
 def call_explain_api(loan_data, methods=None):
     """Call the explain API with the given loan data and methods."""
-    url = f"{BASE_URL}/explain"
-    
     # Add explanation methods if provided
     if methods:
         loan_data["explanation_methods"] = methods
     
-    # Make the API call
-    response = requests.post(url, headers=headers, json=loan_data)
+    # Make the API request
+    print(f"Calling API with data: {json.dumps(loan_data, indent=2)}")
+    print("-" * 80)
     
-    # Process the response
-    if response.status_code == 200:
-        return response.json()
-    else:
-        print(f"Error: {response.status_code}")
-        print(response.text)
+    try:
+        response = requests.post(
+            f"{API_URL}/explain",
+            json=loan_data,
+            headers=AUTH_HEADER,
+            timeout=10
+        )
+        
+        # Handle response
+        if response.status_code == 200:
+            return response.json()
+        else:
+            print(f"Error: {response.status_code}")
+            print(response.text)
+            return None
+    except Exception as e:
+        print(f"Exception calling API: {str(e)}")
         return None
+
 
 def print_header(title):
     """Print a formatted header."""
@@ -45,110 +50,129 @@ def print_header(title):
     print(f" {title} ".center(80, "="))
     print("=" * 80)
 
+
 def print_explanation_summary(explanation):
     """Print a summary of the explanation."""
     if not explanation:
-        print("No explanation available")
+        print("No explanation received")
         return
     
-    request_id = explanation.get("request_id", "Unknown")
+    # Print basic info
+    request_id = explanation.get("request_id", "unknown")
     prediction = explanation.get("prediction", {})
-    confidence = explanation.get("confidence", {})
-    explanations = explanation.get("explanations", [])
-    computation_time = explanation.get("computation_time", {})
+    decision = prediction.get("decision", "unknown")
+    score = prediction.get("score", 0)
     
     print(f"Request ID: {request_id}")
-    print(f"Prediction: {prediction.get('decision', 'Unknown')} (Score: {prediction.get('score', 'N/A')})")
-    print(f"Confidence: {confidence.get('overall_score', 'Unknown')}")
-    print(f"Computation Time: {computation_time.get('total', 0):.4f} seconds")
-    print(f"Number of Explanations: {len(explanations)}")
+    print(f"Decision: {decision} (score: {score:.2f})")
     
-    # Print details for each explanation method
-    for i, exp in enumerate(explanations):
-        method = exp.get("method", "Unknown")
-        print(f"\n  Explanation {i+1}: {method}")
+    # Print confidence
+    confidence = explanation.get("confidence", {})
+    overall_score = confidence.get("overall_score", 0)
+    print(f"Confidence: {overall_score:.2f}")
+    
+    # Print explanations
+    print("\nExplanations:")
+    for expl in explanation.get("explanations", []):
+        method = expl.get("method", "unknown")
+        model_type = expl.get("model_type", "unknown")
+        print(f"\n- Method: {method} (model: {model_type})")
         
         # Print feature importance if available
-        if exp.get("feature_importance"):
-            print("    Feature Importance:")
-            for feature, importance in exp["feature_importance"].items():
-                print(f"      {feature}: {importance:.4f}")
+        if expl.get("feature_importance"):
+            print("  Feature Importance:")
+            for feature, importance in expl.get("feature_importance", {}).items():
+                print(f"  - {feature}: {importance:.3f}")
         
         # Print decision rules if available
-        if exp.get("decision_rules"):
-            print("    Decision Rules:")
-            for rule in exp["decision_rules"]:
-                print(f"      - {rule}")
+        if expl.get("decision_rules"):
+            print("  Decision Rules:")
+            for rule in expl.get("decision_rules", []):
+                print(f"  - {rule}")
         
         # Print counterfactuals if available
-        if exp.get("counterfactuals"):
-            print("    Counterfactuals:")
-            for j, cf in enumerate(exp["counterfactuals"]):
-                print(f"      Counterfactual {j+1}: {cf.get('explanation', 'No explanation')}")
-        
+        if expl.get("counterfactuals"):
+            print("  Counterfactuals:")
+            for cf in expl.get("counterfactuals", [])[:2]:  # Show at most 2
+                print(f"  - {cf.get('explanation', '')}")
+                
         # Print feature interactions if available
-        if exp.get("feature_interactions"):
-            print("    Feature Interactions: Available")
+        if expl.get("feature_interactions"):
+            print("  Feature Interactions:")
+            interactions = expl.get("feature_interactions", {})
+            # Just show a sample of interactions
+            for feature, inters in list(interactions.items())[:2]:
+                print(f"  - {feature} interacts with:")
+                for other, value in list(inters.items())[:3]:
+                    print(f"    - {other}: {value:.2f}")
         
         # Print visualizations if available
-        visualizations = exp.get("visualizations", [])
-        print(f"    Visualizations: {len(visualizations)} available")
+        if expl.get("visualizations"):
+            print("  Visualizations:")
+            for viz in expl.get("visualizations", []):
+                print(f"  - {viz.get('type')}: {viz.get('title')}")
+    
+    # Print computation time
+    comp_time = explanation.get("computation_time", {})
+    total_time = comp_time.get("total", 0)
+    print(f"\nTotal computation time: {total_time:.2f} seconds")
+
 
 def main():
     """Main function to test the XAI service."""
-    print_header("XAI Service Testing")
+    print_header("XAI Service Test")
     
-    # Test Case 1: Approved loan with feature importance
-    print_header("Test Case 1: Approved Loan (Feature Importance)")
+    # Test Case 1: Basic loan with feature importance
+    print_header("Test Case 1: Basic Loan with Feature Importance")
     loan_data_1 = {
-        "income": 80000,
-        "loan_amount": 20000,
-        "credit_history": 8,
-        "employment_years": 5,
-        "debt_to_income_ratio": 0.2
-    }
-    result_1 = call_explain_api(loan_data_1, ["feature_importance"])
-    print_explanation_summary(result_1)
-    
-    # Test Case 2: Denied loan with Shapley values
-    print_header("Test Case 2: Denied Loan (Shapley Values)")
-    loan_data_2 = {
-        "income": 50000,
-        "loan_amount": 20000,
-        "credit_history": 4,
-        "employment_years": 2,
-        "debt_to_income_ratio": 0.4
-    }
-    result_2 = call_explain_api(loan_data_2, ["shapley_values"])
-    print_explanation_summary(result_2)
-    
-    # Test Case 3: Borderline loan with counterfactual explanation
-    print_header("Test Case 3: Borderline Loan (Counterfactual)")
-    loan_data_3 = {
-        "income": 65000,
-        "loan_amount": 25000,
-        "credit_history": 6,
-        "employment_years": 3,
-        "debt_to_income_ratio": 0.35
-    }
-    result_3 = call_explain_api(loan_data_3, ["counterfactual"])
-    print_explanation_summary(result_3)
-    
-    # Test Case 4: Multi-method explanation
-    print_header("Test Case 4: All Explanation Methods")
-    loan_data_4 = {
-        "income": 70000,
-        "loan_amount": 22000,
+        "income": 60000,
+        "loan_amount": 15000,
         "credit_history": 7,
-        "employment_years": 4,
-        "debt_to_income_ratio": 0.25
+        "explanation_methods": ["feature_importance"]
     }
-    result_4 = call_explain_api(loan_data_4, ["feature_importance", "shapley_values", "counterfactual"])
-    print_explanation_summary(result_4)
+    explanation_1 = call_explain_api(loan_data_1)
+    print_explanation_summary(explanation_1)
     
-    # Print the full result for the multi-method explanation if needed
-    # print_header("Full Result for Test Case 4")
-    # pprint(result_4)
+    # Test Case 2: Basic loan with Shapley values
+    print_header("Test Case 2: Basic Loan with Shapley Values")
+    loan_data_2 = {
+        "income": 60000,
+        "loan_amount": 15000,
+        "credit_history": 7,
+        "explanation_methods": ["shapley_values"]
+    }
+    explanation_2 = call_explain_api(loan_data_2)
+    print_explanation_summary(explanation_2)
+    
+    # Test Case 3: Edge case loan with counterfactual
+    print_header("Test Case 3: Borderline Loan with Counterfactual")
+    loan_data_3 = {
+        "income": 50000,
+        "loan_amount": 24000,  # Almost 50% of income
+        "credit_history": 5,   # Mediocre credit
+        "employment_years": 2,
+        "debt_to_income_ratio": 0.35,
+        "explanation_methods": ["counterfactual"]
+    }
+    explanation_3 = call_explain_api(loan_data_3)
+    print_explanation_summary(explanation_3)
+    
+    # Test Case 4: Multiple explanation methods
+    print_header("Test Case 4: Multiple Explanation Methods")
+    loan_data_4 = {
+        "income": 80000,
+        "loan_amount": 30000,
+        "credit_history": 8,
+        "employment_years": 7,
+        "debt_to_income_ratio": 0.2,
+        "age": 42,
+        "previous_defaults": 0,
+        "dependents": 2,
+        "explanation_methods": ["feature_importance", "shapley_values", "counterfactual"]
+    }
+    explanation_4 = call_explain_api(loan_data_4)
+    print_explanation_summary(explanation_4)
+
 
 if __name__ == "__main__":
     main()

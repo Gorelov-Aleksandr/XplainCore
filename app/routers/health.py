@@ -1,9 +1,19 @@
+"""
+Health check endpoints for the XAI service.
+
+This module provides endpoints for health checks and metrics.
+"""
 from fastapi import APIRouter, Response
-from prometheus_client import generate_latest
+from prometheus_client import generate_latest, CONTENT_TYPE_LATEST
+from loguru import logger
 
-router = APIRouter(tags=["monitoring"])
+router = APIRouter(
+    tags=["health"],
+    responses={404: {"description": "Not found"}},
+)
 
-@router.get("/health", summary="Service health check")
+
+@router.get("/health")
 async def health():
     """
     Health check endpoint for the service.
@@ -12,9 +22,14 @@ async def health():
     Returns:
         dict: Status information
     """
-    return {"status": "OK", "message": "Service is healthy"}
+    return {
+        "status": "ok",
+        "service": "xai-service",
+        "version": "1.0.0"
+    }
 
-@router.get("/metrics", summary="Prometheus metrics")
+
+@router.get("/metrics")
 async def metrics():
     """
     Endpoint for Prometheus metrics.
@@ -22,4 +37,7 @@ async def metrics():
     Returns:
         Response: Prometheus metrics in text format
     """
-    return Response(content=generate_latest(), media_type="text/plain")
+    return Response(
+        content=generate_latest(),
+        media_type=CONTENT_TYPE_LATEST
+    )

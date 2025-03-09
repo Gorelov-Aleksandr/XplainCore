@@ -10,11 +10,14 @@ import asyncio
 from functools import wraps
 from typing import Dict, List, Any, Optional
 
-from ..models import InputData, ExplanationResponse, ExplanationMethod, ExplanationDetails
+from app.models import ExplanationMethod
+from app.models.schema import InputData, ExplanationResponse, ExplanationDetails
 from ..auth import get_current_user
 from ..config import settings
 from ..monitoring import tracer
 from ..explainers import FeatureImportanceExplainer, ShapleyExplainer, CounterfactualExplainer
+from ..database import get_db
+from ..repository import ExplanationRepository
 
 router = APIRouter(tags=["xai"])
 
@@ -92,6 +95,7 @@ async def explain(
     data: InputData,
     background_tasks: BackgroundTasks,
     request: Request,
+    db = Depends(get_db),
     current_user: dict = Depends(get_current_user)
 ):
     """
@@ -215,7 +219,31 @@ async def explain(
             )
             
             # Log the explanation in the background
-            background_tasks.add_task(log_explanation, [e.model_dump() for e in explanations], request_id)
+            # Convert explanation objects to dictionaries
+            explanation_dicts = [e.dict() for e in explanations]
+            background_tasks.add_task(log_explanation, explanation_dicts, request_id)
+            
+            # Save the explanation to the database
+            user_id = current_user.get("id", "dev-user-id")
+            try:
+                # Save to database in background to avoid blocking the response
+                background_tasks.add_task(
+                    ExplanationRepository.save_explanation,
+                    db,
+                    request_id,
+                    data.dict(),
+                    prediction,
+                    confidence_metrics,
+                    explanation_dicts,
+                    response.metadata,
+                    computation_times,
+                    version_info,
+                    user_id
+                )
+                logger.info(f"Scheduled explanation {request_id} to be saved to database")
+            except Exception as e:
+                logger.error(f"Error scheduling database save for explanation {request_id}: {str(e)}")
+                # Continue even if database save fails, we'll still return the response
             
             return response
     except ValidationError as e:

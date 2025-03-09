@@ -1,4 +1,7 @@
-# This file makes the routers directory a Python package
-from app.routers import explain, health
+"""
+API routers module.
 
-__all__ = ["explain", "health"]
+This module initializes and exports the API routers for different endpoints.
+"""
+# Import routers to make them available when importing from app.routers
+from app.routers import explain, health, history

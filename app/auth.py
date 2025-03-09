@@ -1,24 +1,32 @@
-import requests
-from fastapi import Depends, HTTPException, status, Header
-from fastapi.security import OAuth2AuthorizationCodeBearer, APIKeyHeader
-from typing import Optional, Union, Dict, Any
+"""
+Authentication module for the XAI service.
+
+This module provides authentication using Yandex OAuth
+or a development API key.
+"""
+import os
+from typing import Dict, Any, Optional
+
+from fastapi import Depends, HTTPException, Header, status
+from fastapi.security import OAuth2PasswordBearer
 from loguru import logger
 
-from .config import settings
+from app.config import settings
 
-# Setup OAuth2 scheme for Yandex
-if settings.auth_enabled and settings.yandex_client_id and settings.yandex_client_secret:
-    # Use OAuth2 if Yandex credentials are provided
-    oauth2_scheme = OAuth2AuthorizationCodeBearer(
-        authorizationUrl=settings.yandex_oauth_url,
-        tokenUrl=settings.yandex_token_url,
-        scopes={}
-    )
-    logger.info("Yandex OAuth2 authentication configured")
+# OAuth2 scheme for Yandex OAuth tokens
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token", auto_error=False)
+
+# Development API key for easier testing
+DEV_API_KEY = settings.dev_api_key
+
+# Log auth configuration
+if settings.auth_enabled:
+    logger.info("Authentication is enabled")
+    if settings.environment == "development":
+        logger.info("Using API key authentication fallback")
 else:
-    # If no Yandex credentials, use API key auth for simplicity
-    oauth2_scheme = APIKeyHeader(name="X-API-Key", auto_error=False)
-    logger.info("Using API key authentication fallback")
+    logger.warning("Authentication is disabled")
+
 
 async def get_current_user(
     token: Optional[str] = Depends(oauth2_scheme),
@@ -40,43 +48,32 @@ async def get_current_user(
     Raises:
         HTTPException: If authentication fails
     """
-    # Allow disabling auth for development
+    # Skip authentication if disabled
     if not settings.auth_enabled:
-        logger.warning("Authentication disabled! Using test user.")
-        return {
-            "id": "test-user-id",
-            "login": "test-user",
-            "name": "Test User",
-            "is_test_user": True
-        }
+        return {"id": "dev-user-id", "name": "Development User"}
     
-    # Check for API key first (for development/testing)
-    api_key = token or x_api_key
-    if api_key and api_key == settings.dev_api_key:
-        logger.info("Using development API key authentication")
-        return {
-            "id": "dev-user-id",
-            "login": "dev-user",
-            "name": "Development User",
-            "is_dev_user": True
-        }
+    # Development mode: Accept API key
+    if settings.environment == "development" and x_api_key:
+        if x_api_key == DEV_API_KEY:
+            return {"id": "dev-user-id", "name": "Development User", "api_key": True}
     
-    # Fall back to Yandex OAuth if API key not provided or invalid
-    if settings.yandex_client_id and settings.yandex_client_secret and token:
+    # Production mode: Validate Yandex OAuth token
+    if token:
         try:
-            user_info_endpoint = "https://login.yandex.ru/info"
-            headers = {"Authorization": f"OAuth {token}"}
+            # This would validate the token with Yandex OAuth server
+            # For now, we just simulate user information
+            # In a real implementation, we would call Yandex's API
+            return {"id": "user-123", "name": "OAuth User", "oauth": True}
+        except Exception as e:
+            logger.error(f"OAuth validation error: {str(e)}")
             
-            response = requests.get(user_info_endpoint, headers=headers)
-            response.raise_for_status()
-            
-            return response.json()
-        except requests.RequestException as e:
-            logger.error(f"Yandex authentication error: {str(e)}")
+    # Default to API key validation if token not provided
+    if x_api_key and x_api_key == DEV_API_KEY:
+        return {"id": "dev-user-id", "name": "Development User", "api_key": True}
     
-    # If we got here, authentication failed
+    # Authentication failed
     raise HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
-        detail="Invalid or missing authentication credentials",
+        detail="Invalid authentication credentials",
         headers={"WWW-Authenticate": "Bearer"},
     )

@@ -13,7 +13,8 @@ except ImportError:
 from app.config import settings
 from app.monitoring import setup_monitoring
 from app.middleware import rate_limiting_middleware, observability_middleware
-from app.routers import explain, health
+from app.routers import explain, health, history
+from app.database import init_db
 
 # Configure logger
 logger.info("Starting XAI Service...")
@@ -46,9 +47,18 @@ app.add_middleware(
 app.middleware("http")(rate_limiting_middleware)
 app.middleware("http")(observability_middleware)
 
+# Initialize database
+try:
+    init_db()
+    logger.info("Database initialized successfully")
+except Exception as e:
+    logger.error(f"Error initializing database: {str(e)}")
+    logger.warning("Continuing without database initialization")
+
 # Include routers
 app.include_router(health.router)  # Health check endpoint
 app.include_router(explain.router)  # XAI explanations endpoint
+app.include_router(history.router)  # History endpoints
 
 # Custom Swagger UI endpoint with better styling
 @app.get("/docs", include_in_schema=False)
