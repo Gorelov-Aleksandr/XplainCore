@@ -82,6 +82,12 @@ async def get_explanation_for_method(method: ExplanationMethod, data: InputData,
     
     return explanation, computation_times
 
+@router.post(
+    "/explain",
+    response_model=ExplanationResponse,
+    summary="Generate model explanation"
+)
+@cache_decorator(ttl=settings.cache_ttl)
 async def explain(
     data: InputData,
     background_tasks: BackgroundTasks,
@@ -209,7 +215,7 @@ async def explain(
             )
             
             # Log the explanation in the background
-            background_tasks.add_task(log_explanation, [e.dict() for e in explanations], request_id)
+            background_tasks.add_task(log_explanation, [e.model_dump() for e in explanations], request_id)
             
             return response
     except ValidationError as e:
