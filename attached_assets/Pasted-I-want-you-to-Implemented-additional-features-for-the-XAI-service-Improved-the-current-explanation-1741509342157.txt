@@ -1,0 +1,41 @@
+I want you to:
+
+Implemented additional features for the XAI service
+Improved the current explanations with additional visualization options.
+Added more detailed documentation for the endpoint API.
+Focused on a specific aspect of the service that I would like to improve, namely addressing the problems of transparency and interpretability of AI, i.e.:
+Lack of universal methods for explaining deep learning neural network decisions
+Difficulty in interoperability of models with many interacting components
+The "black box" problem when working with transformers and the image of language models.
+Insufficient methods for verifying the complex AI system
+Difficulty in checking the correctness of models in extreme cases
+Lack of standards for assessing the acceptability of models.
+Complexity of adaptation methods for different regions (medicine, finance)
+Lack of industry standards
+Problems of validation in highly critical applications
+Complexity of presenting views to end users
+Lack of universal formats for visualizing interpretations
+Problem of user trust in explanations II
+Complexity of compliance with GDPR and other regulations
+Problem of responsibility for AI system decisions
+Lack of clear acceptable conditions
+Computational limitations:
+High computational methods
+Costs of access at first
+Problems of scaling understandability methods
+Integration with process development:
+Complexity of embedding explainability methods in ML development pipelines
+Lack of tools for continuous testing of interpretability
+Problem of query generation
+Multimodal systems:
+Complexity of explaining system decisions, enterprises with other types of data
+Lack of methods for similar hybrid models
+Problems of considering issues of different modalities
+Solving the problem, solving without leaking significant data
+Protection against attacks on systems vulnerabilities
+Balancing between transparency and respect for intellectual property
+Methodological problems:
+Lack of a single metric for the quality of any
+Difficulty in assessing the usefulness of interpretations for different users
+Problem of comparing different methods of understandability
+If some problems or improvements in these areas have already been implemented, they can be ignored.
