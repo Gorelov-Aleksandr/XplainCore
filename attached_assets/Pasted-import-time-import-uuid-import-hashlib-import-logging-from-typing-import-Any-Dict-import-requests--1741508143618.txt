@@ -1,0 +1,251 @@
+import time
+import uuid
+import hashlib
+import logging
+from typing import Any, Dict
+
+import requests  # Для обращения к API Яндекса
+from fastapi import FastAPI, HTTPException, Request, status, BackgroundTasks, Response, Depends
+from fastapi.responses import JSONResponse
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.security import OAuth2AuthorizationCodeBearer
+
+from loguru import logger
+from pydantic import BaseModel, Field, ValidationError, validator
+from prometheus_client import Counter, Histogram, Gauge, generate_latest
+from aiocache import Cache, cached
+from aiocache.serializers import JsonSerializer
+from opentelemetry import trace
+from opentelemetry.sdk.trace import TracerProvider
+from opentelemetry.sdk.resources import Resource
+from opentelemetry.sdk.trace.export import BatchSpanProcessor
+from opentelemetry.exporter.jaeger.proto.grpc import JaegerExporter
+from pydantic_settings import BaseSettings
+import sentry_sdk
+
+# Инициализация Sentry для мониторинга ошибок
+sentry_sdk.init(
+    dsn="https://example@sentry.io/123",
+    traces_sample_rate=1.0,
+    environment="production",
+)
+
+# Настройки приложения, включая параметры для интеграции с Яндекс OAuth
+class Settings(BaseSettings):
+    redis_url: str = "redis://redis:6379/0"
+    jaeger_host: str = "jaeger"
+    jaeger_port: int = 6831
+    yandex_oauth_url: str = "https://oauth.yandex.ru/authorize"
+    yandex_token_url: str = "https://oauth.yandex.ru/token"
+    yandex_client_id: str = "YOUR_YANDEX_CLIENT_ID"
+    yandex_client_secret: str = "YOUR_YANDEX_CLIENT_SECRET"
+
+settings = Settings()
+
+# Настройка распределённой трассировки через OpenTelemetry и Jaeger
+trace.set_tracer_provider(
+    TracerProvider(
+        resource=Resource.create({"service.name": "xai-service"})
+    )
+)
+jaeger_exporter = JaegerExporter(
+    agent_host_name=settings.jaeger_host,
+    agent_port=settings.jaeger_port,
+)
+trace.get_tracer_provider().add_span_processor(
+    BatchSpanProcessor(jaeger_exporter)
+)
+tracer = trace.get_tracer(__name__)
+
+# Инициализация кэша (Redis)
+cache = Cache.from_url(settings.redis_url, serializer=JsonSerializer())
+
+# Определение модели входных данных
+class InputData(BaseModel):
+    income: float = Field(..., gt=0, example=50000.0)
+    loan_amount: float = Field(..., gt=0, example=20000.0)
+    credit_history: int = Field(..., ge=0, le=10, example=7)
+
+    @validator('loan_amount')
+    def validate_loan_amount(cls, v, values):
+        if 'income' in values and v > values['income'] * 0.5:
+            raise ValueError("Loan amount exceeds 50% of income")
+        return v
+
+# Определение модели ответа
+class ExplanationResponse(BaseModel):
+    request_id: str
+    explanation: Dict[str, Any]
+    metadata: Dict[str, str]
+
+# Настройка OAuth2 для Яндекс
+oauth2_scheme = OAuth2AuthorizationCodeBearer(
+    authorizationUrl=settings.yandex_oauth_url,
+    tokenUrl=settings.yandex_token_url,
+    scopes={}
+)
+
+def get_current_user(token: str = Depends(oauth2_scheme)) -> dict:
+    """
+    Получение информации о пользователе от Яндекса по переданному токену.
+    Отправляет запрос к https://login.yandex.ru/info с заголовком авторизации.
+    """
+    user_info_endpoint = "https://login.yandex.ru/info"
+    headers = {"Authorization": f"OAuth {token}"}
+    response = requests.get(user_info_endpoint, headers=headers)
+    if response.status_code != 200:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid credentials")
+    return response.json()
+
+# Инициализация FastAPI
+app = FastAPI()
+
+# Добавление CORS middleware
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+# Простое rate limiting (ограничение 100 запросов в минуту с одного IP)
+RATE_LIMIT = 100
+rate_limit_cache: Dict[str, Dict[str, Any]] = {}
+
+@app.middleware("http")
+async def rate_limiting_middleware(request: Request, call_next):
+    client_ip = request.client.host
+    current_time = time.time()
+    window = 60  # секунд
+    if client_ip not in rate_limit_cache:
+        rate_limit_cache[client_ip] = {"count": 1, "start_time": current_time}
+    else:
+        elapsed = current_time - rate_limit_cache[client_ip]["start_time"]
+        if elapsed > window:
+            rate_limit_cache[client_ip] = {"count": 1, "start_time": current_time}
+        else:
+            rate_limit_cache[client_ip]["count"] += 1
+            if rate_limit_cache[client_ip]["count"] > RATE_LIMIT:
+                return JSONResponse(
+                    status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                    content={"error": "Rate limit exceeded. Try again later."}
+                )
+    response = await call_next(request)
+    return response
+
+# Настройка метрик Prometheus
+REQUEST_COUNTER = Counter(
+    'http_requests_total',
+    'Total HTTP Requests',
+    ['method', 'endpoint', 'status']
+)
+
+RESPONSE_TIME = Histogram(
+    'http_response_time_seconds',
+    'Response time histogram',
+    ['endpoint']
+)
+
+ACTIVE_REQUESTS = Gauge(
+    'active_requests',
+    'Active HTTP Requests',
+    ['endpoint']
+)
+
+# Middleware для логирования, метрик и передачи request_id
+@app.middleware("http")
+async def observability_middleware(request: Request, call_next):
+    request_id = str(uuid.uuid4())
+    request.state.request_id = request_id
+    logger.bind(request_id=request_id)
+    start_time = time.time()
+    ACTIVE_REQUESTS.labels(endpoint=request.url.path).inc()
+    
+    try:
+        response = await call_next(request)
+        duration = time.time() - start_time
+        
+        REQUEST_COUNTER.labels(
+            method=request.method,
+            endpoint=request.url.path,
+            status=response.status_code
+        ).inc()
+        RESPONSE_TIME.labels(request.url.path).observe(duration)
+        return response
+    except Exception as e:
+        logger.error(f"Request failed: {str(e)}")
+        sentry_sdk.capture_exception(e)
+        return JSONResponse(
+            status_code=500,
+            content={"error": "Internal Server Error"}
+        )
+    finally:
+        ACTIVE_REQUESTS.labels(endpoint=request.url.path).dec()
+
+# Построение ключа для кэширования с использованием MD5
+def custom_cache_key_builder(func, *args, **kwargs):
+    if args:
+        input_data = args[0]
+        data_str = input_data.json()
+        hashed = hashlib.md5(data_str.encode()).hexdigest()
+        return f"explain:{hashed}"
+    return "explain:default"
+
+# Эндпоинт для генерации объяснения модели с интеграцией Яндекс OAuth
+@app.post(
+    "/explain",
+    response_model=ExplanationResponse,
+    summary="Generate model explanation"
+)
+@cached(ttl=300, key_builder=custom_cache_key_builder, cache=cache)
+async def explain(
+    data: InputData,
+    background_tasks: BackgroundTasks,
+    request: Request,
+    current_user: dict = Depends(get_current_user)
+):
+    with tracer.start_as_current_span("explain_endpoint") as span:
+        try:
+            # Симуляция сложных вычислений
+            explanation = {
+                "feature_importance": {"income": 0.6, "loan_amount": 0.3},
+                "decision": "APPROVED"
+            }
+            background_tasks.add_task(log_explanation, explanation, request.state.request_id)
+            
+            return ExplanationResponse(
+                request_id=request.state.request_id,
+                explanation=explanation,
+                metadata={"version": "1.0"}
+            )
+        except ValidationError as e:
+            logger.error(f"Validation error: {e.errors()}")
+            raise HTTPException(
+                status_code=422,
+                detail={"errors": e.errors()}
+            )
+        except Exception as e:
+            logger.exception("Unhandled exception in /explain endpoint")
+            sentry_sdk.capture_exception(e)
+            raise HTTPException(
+                status_code=500,
+                detail="Internal Server Error"
+            )
+
+# Фоновая задача для логирования
+async def log_explanation(data: dict, request_id: str):
+    logger.info(f"[{request_id}] Explanation generated: {data}")
+
+# Health check endpoint
+@app.get("/health", summary="Service health check")
+async def health():
+    return {"status": "OK"}
+
+# Эндпоинт для метрик Prometheus
+@app.get("/metrics", summary="Prometheus metrics")
+async def metrics():
+    return Response(content=generate_latest(), media_type="text/plain")
+
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run(app, host="0.0.0.0", port=8000)
