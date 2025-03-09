@@ -1,0 +1,65 @@
+Here are the priorities for further development of the XAI service, taking into account high business values, implementation complexity, and reliable integration for large IT companies (e.g. Yandex):
+
+📊 1. Adding more understandable AI methods (top priority)
+Why it's important:
+
+Expands the interpretability of the model using various approaches (SHAP, LIME, Anchors, Counterfactuals).
+Increases user trust and ensures integration in regulated areas (finance, medtech).
+Gives a competitive advantage when selling, this is a multi-methodological explanation.
+What can be done:
+
+SHAP integration (global and local interpretation).
+Support for counterfeits (explanation through "what if").
+Validation using domain-oriented approaches (e.g. checking traces on your own business cases).
+📈 2. Improving metrics (high priority)
+Why it's important:
+
+Ensure reliability of observations and increase transparency.
+Important for decision-making in special situations (e.g. loan approval, diagnostics).
+What can be done:
+
+Introduce confidence intervals for observations.
+Supported metrics: entropy, forecast reliability, aleatoric and epistemic uncertainty.
+🎨 3. Improving visualization parameters (medium priority)
+Why it's important:
+
+Improves user experience and understanding of complex issues.
+Enables large clients (e.g. Yandex) to implement a solution with a ready-made user interface faster.
+What can be done:
+
+Integrate with Grafana (or create custom panels on Streamlit/FastAPI).
+Preview: heat maps, decision paths, investment contribution.
+🔍 4. Adding additional validation rules (medium priority)
+Why it's important:
+
+Reduces the likelihood of errors when working with uncorrected data.
+Important when working with benefits and legal living conditions.
+What can be done:
+
+Checking for anomalies (e.g., too high a credit request).
+Automatic boundary checking and compliance.
+🗂️ 5. Implementing persistent storage (medium priority)
+Why it's important:
+
+Allows you to record and analyze explanations dynamically.
+Important for audit and validation solutions in large equipment.
+What can be done:
+
+Storing interests in PostgreSQL or ClickHouse.
+Archiving and searching on request.
+📊 6. Creating a Diptych/interface panel (low priority, after implementing basic functions)
+Why it's important:
+
+Gives clients a convenient way to analyze results.
+Important for further decisions in presentations and negotiations.
+What can be done:
+
+Dashboard with real explanations and metrics.
+Preview of model performance and trace distribution (Jaeger, Grafana).
+✅ Final order of priorities:
+Add more understandable AI methods (SHAP, counterfeits)
+Increase the reliability of metrics (confidence intervals)
+Improving visualization parameters (interactive graphs)
+Adding additional validation rules (data validation)
+Implementing persistent storage (logging subsequent events)
+Creating a dashboard/interface (UI for visualization)
