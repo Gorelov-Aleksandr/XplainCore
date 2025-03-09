@@ -175,7 +175,6 @@ class ShapleyExplainer(BaseExplainer):
         
         return interactions
     
-    @BaseExplainer.measure_time("create_visualizations")
     def _create_visualizations(self, 
                               data: InputData, 
                               shapley_values: Dict[str, float],
@@ -280,7 +279,6 @@ class ShapleyExplainer(BaseExplainer):
         
         return visualizations
     
-    @BaseExplainer.measure_time("generate_confidence_metrics")
     async def get_confidence(self, data: InputData, **kwargs) -> Dict[str, Any]:
         """
         Calculate confidence metrics for the explanation.

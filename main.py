@@ -6,7 +6,8 @@ from fastapi.staticfiles import StaticFiles
 try:
     from loguru import logger
 except ImportError:
-    import logging as logger
+    import logging
+    logger = logging
     logger.basicConfig(level=logging.INFO)
 
 from app.config import settings
